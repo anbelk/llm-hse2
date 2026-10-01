@@ -37,6 +37,8 @@ Batch size и accumulation проверяют влияние размера эф
 [Основное сравнение](training/comparison_plots.png) · [BF16/FP32](training/precision_comparison.png) · [Все кривые обучения](training/individual_loss_curves.png).
 Исходные значения train loss — в [training/losses](training/losses), итоговые метрики — в [training/results.csv](training/results.csv). На сравнительных графиках train loss усреднён по интервалам 20 секунд; validation измерен только в конце.
 
+Построение графиков: [plot_losses.py](plot_losses.py). Из корня репозитория: `python -m pip install matplotlib`, затем `python hw1/plot_losses.py`. Скрипт читает сохранённые CSV; повторное обучение не требуется.
+
 ## Генерация лучшей модели
 
 Выбран `lr1e-4` с минимальным eval loss **5.3145**. В [generations.json](generations.json) сохранены три полных примера: «Москва — это», «Искусственный интеллект — это», «В начале XX века». Параметры: sampling, temperature 0.8, top-p 0.95, до 100 новых токенов, seed 42. Ниже — дословные начала двух генераций, без исправления ошибок модели.

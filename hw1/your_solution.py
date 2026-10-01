@@ -80,7 +80,9 @@ def prepare_tokenizer():
     - Set pad_token to eos_token
     - Return the tokenizer
     """
-    pass
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
+    tokenizer.pad_token = tokenizer.eos_token
+    return tokenizer
 
 
 def tokenize_function(examples, tokenizer):
@@ -90,7 +92,19 @@ def tokenize_function(examples, tokenizer):
     - Create labels from input_ids
     - Return dictionary with 'labels', 'input_ids', and 'attention_mask'
     """
-    pass
+    texts = examples["text"]
+    encoded = tokenizer(
+        texts,
+        truncation=True,
+        padding="max_length",
+        max_length=MAX_LENGTH
+    )
+    labels = encoded[INPUT_IDS].copy()
+    return {
+        LABELS: labels,
+        INPUT_IDS: encoded[INPUT_IDS],
+        ATTENTION_MASK: encoded[ATTENTION_MASK]
+    }
 
 
 def save_as_parquets(ds, output_dir=OUTPUT_DIR, num_shards=NUM_SHARDS):
@@ -100,7 +114,13 @@ def save_as_parquets(ds, output_dir=OUTPUT_DIR, num_shards=NUM_SHARDS):
     - Split dataset into num_shards shards
     - Save each shard as a parquet file with format: {output_dir}/{index:05d}.parquet
     """
-    pass
+    os.makedirs(output_dir, exist_ok=True)
+    for index in range(num_shards):
+        shard = ds.shard(
+            num_shards=num_shards,
+            index=index
+        )
+        shard.to_parquet(f"{output_dir}/{index:05d}.parquet")
 
 
 def prepare_dataset():
@@ -111,7 +131,13 @@ def prepare_dataset():
     - Save as parquet files
     """
     dataset = load_dataset("wikimedia/wikipedia", "20231101.ru", split="train")
-
+    tokenizer = prepare_tokenizer()
+    tokenized_dataset = dataset.map(
+        tokenize_function,
+        batched=True,
+        fn_kwargs={"tokenizer": tokenizer}
+    )
+    save_as_parquets(tokenized_dataset)
 
 
 def load_tokenized_dataset(data_dir=OUTPUT_DIR):
@@ -121,7 +147,17 @@ def load_tokenized_dataset(data_dir=OUTPUT_DIR):
     - Load them using load_dataset('parquet', data_files=...)
     - Return the 'train' split
     """
-    pass
+    files = [
+        os.path.join(data_dir, filename)
+        for filename in os.listdir(data_dir)
+        if filename.endswith(".parquet")
+    ]
+    files.sort()
+    dataset = load_dataset(
+        "parquet",
+        data_files=files
+    )
+    return dataset["train"]
 
 
 def split_dataset(dataset, validation_size=VALIDATION_SIZE):
@@ -185,10 +221,19 @@ def train_model():
     - Run final evaluation and print results
     - Save metric history to trainer_state.json for local loss plots
     """
+    tokenizer = prepare_tokenizer()
+    dataset = load_tokenized_dataset()
+    train_dataset, eval_dataset = split_dataset(dataset)
+    model = create_model(tokenizer)
+    training_args = TrainingArguments(**TRAINING_CONFIG)
+
     trainer = Trainer(
-        ...,
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         callbacks=[TimeoutCallback(timeout_seconds=MAX_TRAINING_TIME_SECONDS)] # dont change
-        )
+    )
     trainer.train()
     print("Running final evaluation...")
     eval_results = trainer.evaluate()
